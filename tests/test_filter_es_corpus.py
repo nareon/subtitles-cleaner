@@ -63,6 +63,16 @@ class LineFilterTests(unittest.TestCase):
         kept, _ = self.filter.filter_lines(["Bueno... vale entonces"])
         self.assertEqual(kept, ["Bueno, vale entonces"])
 
+    def test_strips_leading_comma_and_space(self) -> None:
+        normalized = self.filter.normalize(", después de todo")
+        self.assertEqual(normalized, "después de todo")
+
+    def test_considers_comma_stripped_variant_duplicate(self) -> None:
+        lines = [", después de todo", "después de todo"]
+        kept, dropped = self.filter.filter_lines(lines)
+        self.assertEqual(kept, ["después de todo"])
+        self.assertEqual(dropped["duplicate"], 1)
+
     def test_duplicate_detection(self) -> None:
         lines = ["Buenos días", "Buenos días", "Hasta luego"]
         kept, dropped = self.filter.filter_lines(lines)
