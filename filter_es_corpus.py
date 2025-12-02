@@ -30,13 +30,22 @@ class LineFilter:
         self.min_length = min_length
         self.max_length = max_length
 
+    @staticmethod
+    def _strip_trailing_specials(text: str) -> str:
+        while text and not text[-1].isalnum() and text[-1] not in {"!", "?"}:
+            text = text[:-1]
+        return text
+
     def normalize(self, line: str) -> str:
         cleaned = line.replace("\ufeff", "")
+        cleaned = cleaned.replace('"', "")
         cleaned = re.sub(r"^[-–—]\s+", "", cleaned)
         cleaned = re.sub(r"(\.{3,}|…)", ",", cleaned)
         cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned)
-        cleaned = re.sub(r"^[\s.]+|[\s.]+$", "", cleaned)
+        cleaned = re.sub(r"^[\s.]+", "", cleaned)
+        cleaned = cleaned.strip()
+        cleaned = self._strip_trailing_specials(cleaned)
         return cleaned
 
     def too_many_digits(self, line: str) -> bool:
@@ -61,15 +70,15 @@ class LineFilter:
         weird = sum(1 for ch in line if not (ch.isalnum() or ch in allowed_extra))
         return weird > 3
 
-    def should_keep(self, line: str) -> tuple[bool, str | None]:
-        normalized = self.normalize(line)
+    def should_keep(self, line: str, *, normalized: str | None = None) -> tuple[bool, str | None]:
+        normalized = self.normalize(line) if normalized is None else normalized
         if not normalized:
             return False, "empty"
         if self.has_timestamp(normalized):
             return False, "timestamp"
         if self.has_metadata(normalized):
             return False, "metadata"
-        if self.has_markup(normalized):
+        if self.has_markup(line):
             return False, "markup"
         if len(normalized) < self.min_length:
             return False, "too_short"
@@ -90,7 +99,7 @@ class LineFilter:
 
         for raw_line in lines:
             normalized = self.normalize(raw_line)
-            keep, reason = self.should_keep(normalized)
+            keep, reason = self.should_keep(raw_line, normalized=normalized)
             if not keep:
                 if reason:
                     dropped_reasons[reason] += 1

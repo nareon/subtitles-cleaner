@@ -63,7 +63,15 @@ class LineFilterTests(unittest.TestCase):
         keep, reason = self.filter.should_keep("  ..Hola amigo...   ")
         self.assertTrue(keep)
         self.assertIsNone(reason)
-        self.assertEqual(self.filter.normalize("  ..Hola amigo...   "), "Hola amigo,")
+        self.assertEqual(self.filter.normalize("  ..Hola amigo...   "), "Hola amigo")
+
+    def test_strips_trailing_special_characters_but_keeps_excited_questions(self) -> None:
+        normalized = self.filter.normalize("¿Listo?!...   ")
+        self.assertEqual(normalized, "¿Listo?!")
+
+    def test_removes_double_quotes_everywhere(self) -> None:
+        normalized = self.filter.normalize('"Ella dijo \"hola\" hoy"')
+        self.assertEqual(normalized, "Ella dijo hola hoy")
 
 
 if __name__ == "__main__":
