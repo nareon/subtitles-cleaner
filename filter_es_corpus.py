@@ -56,6 +56,7 @@ class LineFilter:
         cleaned = re.sub(r"[()]+", "", cleaned)
         cleaned = self._strip_leading_dashes(cleaned)
         cleaned = re.sub(r"(\.{3,}|…)", ",", cleaned)
+        cleaned = re.sub(r"^,\s*", "", cleaned)
         cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned)
         cleaned = re.sub(r"^[\s.]+", "", cleaned)
