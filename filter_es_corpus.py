@@ -21,6 +21,7 @@ TIMESTAMP_RE = re.compile(r"\d{2}:\d{2}(:\d{2})?")
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 EXTRA_META_RE = re.compile(r"(subtitulado por|subtítulos|subtitles|créditos)", re.IGNORECASE)
 BRACKETED_RE = re.compile(r"[\[{].+[\]}]")
+LEADING_DASH_RE = re.compile(r"^[\s]*[-–—−‒⁻➖•·⋅]+\s*")
 
 
 class LineFilter:
@@ -39,13 +40,21 @@ class LineFilter:
             text = trailing_re.sub("", text)
         return text
 
+    @staticmethod
+    def _strip_leading_dashes(text: str) -> str:
+        previous = None
+        while text and text != previous:
+            previous = text
+            text = LEADING_DASH_RE.sub("", text)
+        return text
+
     def normalize(self, line: str) -> str:
         cleaned = line.replace("\ufeff", "")
         cleaned = cleaned.replace('"', "")
         cleaned = cleaned.replace("¿", "")
         cleaned = cleaned.replace("¡", "")
         cleaned = re.sub(r"[()]+", "", cleaned)
-        cleaned = re.sub(r"^[-–—]\s+", "", cleaned)
+        cleaned = self._strip_leading_dashes(cleaned)
         cleaned = re.sub(r"(\.{3,}|…)", ",", cleaned)
         cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned)
