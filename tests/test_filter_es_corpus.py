@@ -49,6 +49,16 @@ class LineFilterTests(unittest.TestCase):
         self.assertEqual(kept, ["Hola, qué tal"])
         self.assertEqual(dropped["duplicate"], 1)
 
+    def test_strips_dash_like_prefixes_without_spaces(self) -> None:
+        normalized = self.filter.normalize("—-–Hola, ¿qué tal?")
+        self.assertEqual(normalized, "Hola, qué tal")
+
+    def test_considers_dash_like_prefixes_duplicates(self) -> None:
+        lines = ["-Hola amigo", "– Hola amigo"]
+        kept, dropped = self.filter.filter_lines(lines)
+        self.assertEqual(kept, ["Hola amigo"])
+        self.assertEqual(dropped["duplicate"], 1)
+
     def test_replaces_ellipsis_with_comma(self) -> None:
         kept, _ = self.filter.filter_lines(["Bueno... vale entonces"])
         self.assertEqual(kept, ["Bueno, vale entonces"])
