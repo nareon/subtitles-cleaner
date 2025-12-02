@@ -115,7 +115,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path("corpus/es.example.txt"),
+        default=Path("corpus/es.sample.txt"),
         help="Path to the raw corpus file",
     )
     parser.add_argument(
