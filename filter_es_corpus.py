@@ -31,12 +31,13 @@ class LineFilter:
         self.max_length = max_length
 
     def normalize(self, line: str) -> str:
-        cleaned = line.replace("\ufeff", "").strip()
+        cleaned = line.replace("\ufeff", "")
         cleaned = re.sub(r"^[-–—]\s+", "", cleaned)
         cleaned = re.sub(r"(\.{3,}|…)", ",", cleaned)
         cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned)
-        return cleaned.strip()
+        cleaned = re.sub(r"^[\s.]+|[\s.]+$", "", cleaned)
+        return cleaned
 
     def too_many_digits(self, line: str) -> bool:
         digits = sum(char.isdigit() for char in line)

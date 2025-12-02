@@ -59,6 +59,12 @@ class LineFilterTests(unittest.TestCase):
         self.assertEqual(kept, ["Buenos días", "Hasta luego"])
         self.assertEqual(dropped["duplicate"], 1)
 
+    def test_trims_trailing_spaces_and_dots(self) -> None:
+        keep, reason = self.filter.should_keep("  ..Hola amigo...   ")
+        self.assertTrue(keep)
+        self.assertIsNone(reason)
+        self.assertEqual(self.filter.normalize("  ..Hola amigo...   "), "Hola amigo,")
+
 
 if __name__ == "__main__":
     unittest.main()
