@@ -1,2 +1,5 @@
 .venv/
-corpus/
+__pycache__/
+*.pyc
+corpus/*
+!corpus/.gitkeep
