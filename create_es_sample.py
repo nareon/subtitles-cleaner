@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent
     corpus_dir = repo_root / "corpus"
     source_path = corpus_dir / "es.txt"
     output_path = corpus_dir / "es.sample.txt"
