@@ -32,13 +32,17 @@ class LineFilter:
 
     @staticmethod
     def _strip_trailing_specials(text: str) -> str:
-        while text and not text[-1].isalnum() and text[-1] not in {"!", "?"}:
-            text = text[:-1]
+        trailing_re = re.compile(r"[\W_]+$")
+        previous = None
+        while text and text != previous:
+            previous = text
+            text = trailing_re.sub("", text)
         return text
 
     def normalize(self, line: str) -> str:
         cleaned = line.replace("\ufeff", "")
         cleaned = cleaned.replace('"', "")
+        cleaned = re.sub(r"[()]+", "", cleaned)
         cleaned = re.sub(r"^[-–—]\s+", "", cleaned)
         cleaned = re.sub(r"(\.{3,}|…)", ",", cleaned)
         cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
