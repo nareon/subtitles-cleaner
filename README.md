@@ -6,8 +6,9 @@ materials and remove obvious noise before a later LLM-powered cleanup.
 
 ## Usage
 
-1. Place the raw sample at `corpus/es.example.txt` (ignored by Git). A small
-   placeholder file can be tracked via `corpus/.gitkeep`.
+1. A small Spanish sample is already provided at `corpus/es.example.txt` so you
+   can run the script immediately. Replace it with your own raw subtitles file
+   when you are ready to process a larger corpus.
 2. Run the filter:
 
    ```bash
