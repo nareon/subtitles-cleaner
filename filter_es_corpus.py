@@ -42,6 +42,8 @@ class LineFilter:
     def normalize(self, line: str) -> str:
         cleaned = line.replace("\ufeff", "")
         cleaned = cleaned.replace('"', "")
+        cleaned = cleaned.replace("¿", "")
+        cleaned = cleaned.replace("¡", "")
         cleaned = re.sub(r"[()]+", "", cleaned)
         cleaned = re.sub(r"^[-–—]\s+", "", cleaned)
         cleaned = re.sub(r"(\.{3,}|…)", ",", cleaned)
@@ -70,7 +72,7 @@ class LineFilter:
         return bool(HTML_TAG_RE.search(line) or BRACKETED_RE.search(line))
 
     def has_weird_symbol_density(self, line: str) -> bool:
-        allowed_extra = set("¡¿?!.,:;'\"-–—() «»… ")
+        allowed_extra = set("?!.,:;'\"-–—() «»… ")
         weird = sum(1 for ch in line if not (ch.isalnum() or ch in allowed_extra))
         return weird > 3
 
