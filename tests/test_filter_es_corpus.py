@@ -43,6 +43,16 @@ class LineFilterTests(unittest.TestCase):
         self.assertFalse(keep)
         self.assertEqual(reason, "no_spanish_letters")
 
+    def test_strips_dialogue_indicator(self) -> None:
+        lines = ["- Hola, ¿qué tal?", "- Hola, ¿qué tal?"]
+        kept, dropped = self.filter.filter_lines(lines)
+        self.assertEqual(kept, ["Hola, ¿qué tal?"])
+        self.assertEqual(dropped["duplicate"], 1)
+
+    def test_replaces_ellipsis_with_comma(self) -> None:
+        kept, _ = self.filter.filter_lines(["Bueno... vale entonces"])
+        self.assertEqual(kept, ["Bueno, vale entonces"])
+
     def test_duplicate_detection(self) -> None:
         lines = ["Buenos días", "Buenos días", "Hasta luego"]
         kept, dropped = self.filter.filter_lines(lines)
