@@ -46,7 +46,7 @@ class LineFilterTests(unittest.TestCase):
     def test_strips_dialogue_indicator(self) -> None:
         lines = ["- Hola, ¿qué tal?", "- Hola, ¿qué tal?"]
         kept, dropped = self.filter.filter_lines(lines)
-        self.assertEqual(kept, ["Hola, ¿qué tal?"])
+        self.assertEqual(kept, ["Hola, ¿qué tal"])
         self.assertEqual(dropped["duplicate"], 1)
 
     def test_replaces_ellipsis_with_comma(self) -> None:
@@ -67,11 +67,19 @@ class LineFilterTests(unittest.TestCase):
 
     def test_strips_trailing_special_characters_but_keeps_excited_questions(self) -> None:
         normalized = self.filter.normalize("¿Listo?!...   ")
-        self.assertEqual(normalized, "¿Listo?!")
+        self.assertEqual(normalized, "¿Listo")
 
     def test_removes_double_quotes_everywhere(self) -> None:
         normalized = self.filter.normalize('"Ella dijo \"hola\" hoy"')
         self.assertEqual(normalized, "Ella dijo hola hoy")
+
+    def test_removes_parentheses_but_keeps_content(self) -> None:
+        normalized = self.filter.normalize("(Hola) amigo (mío)")
+        self.assertEqual(normalized, "Hola amigo mío")
+
+    def test_removes_trailing_questions_exclamations_and_minuses(self) -> None:
+        normalized = self.filter.normalize("¿Vienes?!??---   ")
+        self.assertEqual(normalized, "¿Vienes")
 
 
 if __name__ == "__main__":
