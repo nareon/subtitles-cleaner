@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -72,12 +73,50 @@ def build_user_message(batch: List[str]) -> str:
     )
 
 
+def _strip_code_fences(content: str) -> str:
+    fenced = re.match(r"^```(?:json)?\s*(.*)```\s*$", content, flags=re.DOTALL)
+    return fenced.group(1).strip() if fenced else content
+
+
+def _parse_json_stream(content: str):
+    """Extract JSON objects even if they are not part of a valid array.
+
+    Some LLMs return a series of objects without commas or wrap the payload in
+    prose. This helper scans the string for any decodable JSON object or array
+    and returns them in the order encountered.
+    """
+
+    decoder = json.JSONDecoder()
+    idx = 0
+    results = []
+
+    while idx < len(content):
+        while idx < len(content) and content[idx].isspace():
+            idx += 1
+        if idx >= len(content):
+            break
+
+        try:
+            obj, end = decoder.raw_decode(content, idx)
+        except json.JSONDecodeError:
+            idx += 1
+            continue
+
+        if isinstance(obj, (dict, list)):
+            results.append(obj)
+        idx = end
+
+    return results
+
+
 def extract_json(content: str):
-    content = content.strip()
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        pass
+    content = _strip_code_fences(content.strip())
+
+    for candidate in (content,):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
 
     start_candidates = [pos for pos in (content.find("["), content.find("{")) if pos != -1]
     end_candidates = [content.rfind("]"), content.rfind("}")]
@@ -85,7 +124,14 @@ def extract_json(content: str):
     end = max(end_candidates) if end_candidates else -1
     if start != -1 and end != -1 and end > start:
         snippet = content[start : end + 1]
-        return json.loads(snippet)
+        try:
+            return json.loads(snippet)
+        except json.JSONDecodeError:
+            pass
+
+    streamed = _parse_json_stream(content)
+    if streamed:
+        return streamed if len(streamed) > 1 else streamed[0]
 
     raise ValueError("Cannot parse JSON from LLM response")
 
