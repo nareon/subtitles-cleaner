@@ -1,4 +1,7 @@
 .venv/
+1/logs
+1/corpus
+1/logs_3w
 __pycache__/
 *.pyc
 corpus/*

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 import json
 import os
 import time
@@ -8,41 +9,49 @@ from pathlib import Path
 from tqdm import tqdm
 
 # ==========================
-#   ПУТИ
+#   АРГУМЕНТЫ
 # ==========================
 
-# входной корпус (по строке на фразу)
-SOURCE_CORPUS = Path("corpus/es.filtered.txt")
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--source",
+    required=True,
+    help="входной файл с 3-словными фразами (одна фраза в строке)",
+)
+parser.add_argument(
+    "--out-text",
+    required=True,
+    help="выходной текстовый корпус (чистые фразы, по одной в строке)",
+)
+parser.add_argument(
+    "--out-meta",
+    required=True,
+    help="выходной jsonl с метаданными",
+)
+parser.add_argument(
+    "--checkpoint",
+    required=True,
+    help="файл чекпоинта (номер последней обработанной строки исходника)",
+)
+args = parser.parse_args()
 
-# чистый корпус для обучения (по строке, уже очищенный LLM)
-OUTPUT_TEXT = Path("corpus/es.llm_clean.txt")
-
-# jsonl с метаданными (для БД)
-OUTPUT_META = Path("corpus/es_llm_filtered.jsonl")
-
-# чекпоинт — номер строки во входном SOURCE_CORPUS
-CHECKPOINT = Path("corpus/es.llm_filter_checkpoint.json")
+SOURCE_CORPUS = Path(args.source)
+OUTPUT_TEXT   = Path(args.out_text)
+OUTPUT_META   = Path(args.out_meta)
+CHECKPOINT    = Path(args.checkpoint)
 
 # ==========================
 #   ПАРАМЕТРЫ
 # ==========================
 
-# сколько фраз отправляем в LLM за один запрос
-BATCH_SIZE = 16
+# 3-словные фразы короткие, но чтобы точно не выбивать 1024 токена:
+BATCH_SIZE = 32              # строк на запрос
+MAX_CHARS_PER_BATCH = 900    # суммарная длина строк
+MAX_CHARS_PER_LINE  = 80     # обрезать аномально длинное
 
-# грубый лимит по суммарной длине фраз в батче (символы)
-MAX_CHARS_PER_BATCH = 1200
-
-# максимальная длина одной строки, которую отправляем в LLM
-MAX_CHARS_PER_LINE = 120
-
-# Настройки LLM (OpenAI-совместимый API)
 BASE_URL = "http://localhost:8000/v1"
-API_KEY = "dummy-key"
-
-# ДОЛЖЕН СОВПАДАТЬ со строкой --model при запуске vLLM
-# у вас: vllm serve models/qwen25-15b ...
-MODEL = "models/qwen25-15b"
+API_KEY  = "dummy-key"
+MODEL    = "models/qwen25-15b"   # как в vllm serve
 
 SESSION = requests.Session()
 
@@ -50,12 +59,7 @@ SESSION = requests.Session()
 #   ЧЕКПОИНТ
 # ==========================
 
-
 def load_checkpoint() -> int:
-    """
-    Вернуть номер последней обработанной строки входного файла.
-    -1, если чекпоинта нет или он битый.
-    """
     if CHECKPOINT.exists():
         try:
             data = json.loads(CHECKPOINT.read_text(encoding="utf-8"))
@@ -66,13 +70,9 @@ def load_checkpoint() -> int:
 
 
 def save_checkpoint(last_line: int) -> None:
-    """
-    Атомарно сохранить номер последней полностью обработанной строки.
-    """
     tmp = CHECKPOINT.with_suffix(".tmp")
     tmp.write_text(json.dumps({"last_line": last_line}), encoding="utf-8")
     tmp.replace(CHECKPOINT)
-
 
 # ==========================
 #   LLM
@@ -82,12 +82,12 @@ SYSTEM_PROMPT = """
 Eres lingüista nativo de español y especialista en enseñanza de español.
 
 Tarea:
-- Recibes varias frases originales en español.
+- Recibes frases cortas originales en español (unas 3 palabras).
 - Para cada frase decides si sirve para tarjetas de estudio de español para extranjeros.
 - Si sirve (keep = true), devuelves también una versión limpia.
 
 BUENA FRASE (keep = true):
-- 2–7 palabras.
+- 2–4 palabras tras limpiar.
 - Oración o réplica casi completa.
 - Útil en situaciones cotidianas.
 - Español moderno y natural.
@@ -105,11 +105,8 @@ Si keep = true, campo "clean":
 - sin nombres propios evidentes,
 - palabras separadas por un solo espacio.
 
-ENTRADA:
-JSON con clave "phrases", lista de objetos: {"id": 0, "text": "frase original"}
-
-SALIDA:
-Sólo JSON con lista de objetos:
+FORMATO DE RESPUESTA:
+Responde SOLO con JSON:
 [
   {"id": 0, "keep": true,  "clean": "frase limpia en minusculas"},
   {"id": 1, "keep": false, "clean": ""}
@@ -117,22 +114,16 @@ Sólo JSON con lista de objetos:
 """.strip()
 
 
-# ========= безопасный JSON-парсер =========
 def safe_parse_json(s: str):
     s = s.strip()
-
-    # отрезать всё до первой '[' (если модель что-то дописала до массива)
     i = s.find("[")
     if i > 0:
         s = s[i:]
-
-    # попытка 1 — как есть
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
 
-    # попытка 2: обрезать после последней '}'
     last_brace = s.rfind("}")
     if last_brace != -1:
         s2 = s[: last_brace + 1]
@@ -143,7 +134,6 @@ def safe_parse_json(s: str):
         except json.JSONDecodeError:
             pass
 
-    # попытка 3: собрать все полные объекты вида {...}
     objs = re.findall(r"\{[^{}]*\}", s, flags=re.DOTALL)
     if objs:
         candidate = "[" + ",".join(objs) + "]"
@@ -155,23 +145,39 @@ def safe_parse_json(s: str):
     raise ValueError("JSON parse error from LLM, first 500 chars:\n" + s[:500])
 
 
+def build_user_content(batch):
+    """
+    batch: [{"id": int, "text": str}, ...]
+    Формируем компактный текст вместо JSON:
+    'Frases:\n0: ...\n1: ...'
+    """
+    lines = [
+        "Evalúa las siguientes frases en español.",
+        "Para cada línea devuelve JSON con objetos {\"id\": N, \"keep\": true/false, \"clean\": \"...\"}.",
+        "",
+        "Frases:",
+    ]
+    for obj in batch:
+        lines.append(f"{obj['id']}: {obj['text']}")
+    return "\n".join(lines)
+
+
 def call_llm(batch):
     """
-    batch: список словарей {"id": int, "text": str}
-    возвращает dict[id] -> {"keep": bool, "clean": str}
+    batch: [{"id": int, "text": str}, ...]
+    -> dict[id] = {"keep": bool, "clean": str}
     """
-    user_payload = {"phrases": batch}
+    user_content = build_user_content(batch)
 
     payload = {
         "model": MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+            {"role": "user",   "content": user_content},
         ],
         "temperature": 0.0,
     }
 
-    # --- основная попытка запроса ---
     while True:
         try:
             resp = SESSION.post(
@@ -194,24 +200,20 @@ def call_llm(batch):
     data = resp.json()
     raw_content = data["choices"][0]["message"]["content"].strip()
 
-    # --- пробуем распарсить батч целиком ---
     try:
         arr = safe_parse_json(raw_content)
     except Exception as e:
         print("[JSON ERROR] batch-level error:", e)
         print("[JSON ERROR] falling back to per-item evaluation…")
 
-        # === Индивидуальная обработка каждого элемента ===
         results = {}
         for obj in batch:
+            single_content = build_user_content([obj])
             single_payload = {
                 "model": MODEL,
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": json.dumps({"phrases": [obj]}, ensure_ascii=False),
-                    },
+                    {"role": "user",   "content": single_content},
                 ],
                 "temperature": 0.0,
             }
@@ -242,14 +244,10 @@ def call_llm(batch):
                     time.sleep(1)
 
             if not ok:
-                results[obj["id"]] = {
-                    "keep": False,
-                    "clean": "",
-                }
+                results[obj["id"]] = {"keep": False, "clean": ""}
 
         return results
 
-    # --- JSON нормальный ---
     result = {}
     for item in arr:
         idx = int(item["id"])
@@ -259,11 +257,9 @@ def call_llm(batch):
         }
     return result
 
-
 # ==========================
 #   MAIN
 # ==========================
-
 
 def main():
     OUTPUT_TEXT.parent.mkdir(parents=True, exist_ok=True)
@@ -278,14 +274,13 @@ def main():
             OUTPUT_TEXT.open(mode, encoding="utf-8") as out_txt, \
             OUTPUT_META.open(mode, encoding="utf-8") as out_meta:
 
-        batch_records = []   # список (line_no, phrase)
-        batch_for_llm = []   # список {"id": local_id, "text": phrase}
+        batch_records = []
+        batch_for_llm = []
         batch_chars = 0
         last_line_no = resume_from
         batch_counter = 0
 
-        for line_no, line in enumerate(tqdm(inp, desc="scanning corpus")):
-            # пропускаем уже обработанные строки
+        for line_no, line in enumerate(tqdm(inp, desc=f"scanning {SOURCE_CORPUS.name}")):
             if line_no <= resume_from:
                 continue
 
@@ -293,7 +288,6 @@ def main():
             if not phrase:
                 continue
 
-            # ограничиваем длину одной строки
             if len(phrase) > MAX_CHARS_PER_LINE:
                 phrase = phrase[:MAX_CHARS_PER_LINE]
 
@@ -309,10 +303,7 @@ def main():
                 except Exception as e:
                     print("[JSON ERROR] batch failed, skipping batch:", str(e)[:200])
                     decisions = {
-                        obj["id"]: {
-                            "keep": False,
-                            "clean": "",
-                        }
+                        obj["id"]: {"keep": False, "clean": ""}
                         for obj in batch_for_llm
                     }
 
@@ -329,19 +320,14 @@ def main():
                         if not clean:
                             continue
 
-                        # текстовый корпус
                         out_txt.write(clean + "\n")
-
-                        # метаинформация для БД
                         meta = {
                             "line_no": ln,
                             "orig": orig_phrase,
                             "clean": clean,
                             "llm_keep": True,
                         }
-                        out_meta.write(
-                            json.dumps(meta, ensure_ascii=False) + "\n"
-                        )
+                        out_meta.write(json.dumps(meta, ensure_ascii=False) + "\n")
 
                 batch_counter += 1
                 if batch_counter % 50 == 0:
@@ -364,10 +350,7 @@ def main():
             except Exception as e:
                 print("[JSON ERROR] tail batch failed, skipping:", str(e)[:200])
                 decisions = {
-                    obj["id"]: {
-                        "keep": False,
-                        "clean": "",
-                    }
+                    obj["id"]: {"keep": False, "clean": ""}
                     for obj in batch_for_llm
                 }
 
@@ -387,7 +370,6 @@ def main():
                     }
                     out_meta.write(json.dumps(meta, ensure_ascii=False) + "\n")
 
-        # финальный flush/fsync
         out_txt.flush()
         out_meta.flush()
         os.fsync(out_txt.fileno())
@@ -396,7 +378,7 @@ def main():
         if last_line_no >= 0:
             save_checkpoint(last_line_no)
 
-    print("Clean corpus written to:", OUTPUT_TEXT.resolve())
+    print("Clean 3-word shard written to:", OUTPUT_TEXT.resolve())
     print("Meta index written to:", OUTPUT_META.resolve())
 
 
