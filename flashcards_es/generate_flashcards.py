@@ -19,12 +19,12 @@ import requests
 # ==========================
 #   CONSTANTS
 # ==========================
-INPUT_PATH = Path("corpus/split/es.3w.sample160k.txt")
-OUTPUT_PATH = Path("flashcards_es/es_flashcards.jsonl")
+INPUT_PATH = Path("/home/ol/_p/subtitles-cleaner/1/corpus/split/es.3w.sample160k.txt")
+OUTPUT_PATH = Path("/home/ol/_p/subtitles-cleaner/flashcards_es/es_flashcards.jsonl")
 
 # LLM endpoint configuration (OpenAI-compatible)
 BASE_URL = "http://localhost:8000/v1"
-MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
+MODEL_NAME = "models/qwen25-15b"
 API_KEY = "dummy-key"
 
 # Processing parameters
