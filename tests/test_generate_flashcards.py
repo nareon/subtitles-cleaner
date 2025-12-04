@@ -19,29 +19,32 @@ class ExtractJsonTests(unittest.TestCase):
     def test_accepts_code_fence_array(self) -> None:
         content = """```json
         [
-          {"orig_text": "uno dos tres", "clean_text": "uno dos tres", "score": 0.8}
+          {"phrase": "uno dos tres", "isGood": true, "reason": ""}
         ]
         ```"""
 
         parsed = extract_json(content)
 
         self.assertIsInstance(parsed, list)
-        self.assertEqual(parsed[0]["orig_text"], "uno dos tres")
-        self.assertAlmostEqual(parsed[0]["score"], 0.8)
+        self.assertEqual(parsed[0]["phrase"], "uno dos tres")
+        self.assertTrue(parsed[0]["isGood"])
 
     def test_parses_objects_without_commas(self) -> None:
         content = """
         Ответ:
-        {"orig_text": "hola amigo", "clean_text": "hola amigo", "score": 0.9}
-        {"orig_text": "buenos dias", "clean_text": "buenos días", "score": 1.0}
+        {"phrase": "hola amigo", "isGood": true, "reason": ""}
+        {"phrase": "buenos dias", "isGood": false, "reason": "contiene tilde"}
         """
 
         parsed = extract_json(content)
 
         self.assertIsInstance(parsed, list)
         self.assertEqual(len(parsed), 2)
-        self.assertEqual(parsed[0]["clean_text"], "hola amigo")
-        self.assertEqual(parsed[1]["clean_text"], "buenos días")
+        self.assertEqual(parsed[0]["phrase"], "hola amigo")
+        self.assertTrue(parsed[0]["isGood"])
+        self.assertEqual(parsed[1]["phrase"], "buenos dias")
+        self.assertFalse(parsed[1]["isGood"])
+        self.assertEqual(parsed[1]["reason"], "contiene tilde")
 
 
 if __name__ == "__main__":
