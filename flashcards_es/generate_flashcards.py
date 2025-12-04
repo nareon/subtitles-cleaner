@@ -35,24 +35,68 @@ MAX_RETRIES = 3
 REQUEST_TIMEOUT = 90
 
 PROMPT = """
-Ты должен обработать испанские трёхсловные фразы из корпуса OpenSubtitles и вернуть очищенные варианты.
-Требования к очистке:
-1. Удаляй только шум (знаки препинания, спецсимволы, номера, лишние обращения/имена, географию), но сохраняй смысл фразы.
-2. Итоговая фраза должна быть испанским текстом длиной 2–4 слова, без пустых значений. Если ничего нельзя удалить — верни нормализованный оригинал.
-3. Сохраняй корректную орфографию и диакритику испанского языка; приводи текст к нижнему регистру.
-4. Не добавляй новых смысловых слов. Разрешено только добавить необходимый предлог или союз для грамматики.
+Clasificar la frase:
+- false — mala (contiene nombre propio, apelativo, número en cifras, abreviatura, palabra extranjera, jerga o símbolo especial)
+- true — buena (frase neutra sin esos elementos)
 
-Оценка качества (score в диапазоне 0–1):
-- 1.0: текст чистый, грамматически корректный, без шума;
-- 0.7: остались мелкие артефакты или требуется небольшая правка;
-- 0.3: заметно загрязнение/неясность, но фразу можно понять;
-- 0.0: невозможно очистить (например, не испанский текст).
+Ejemplos:
+{"phrase":"Juan canta bien","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"María cocina sopa","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Pedro juega fútbol","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Ana lee libros","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Luis corre rápido","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Tengo 25 años","isGood":false,"reason":"contiene número en cifras"}
+{"phrase":"En 1999 pasó","isGood":false,"reason":"contiene número en cifras"}
+{"phrase":"Compré 300 manzanas","isGood":false,"reason":"contiene número en cifras"}
+{"phrase":"ONU aprobó resolución","isGood":false,"reason":"contiene abreviatura"}
+{"phrase":"EE.UU. firmó tratado","isGood":false,"reason":"contiene abreviatura"}
+{"phrase":"Uso wifi gratis","isGood":false,"reason":"contiene palabra extranjera"}
+{"phrase":"Estoy online siempre","isGood":false,"reason":"contiene palabra extranjera"}
+{"phrase":"Esto es guay","isGood":false,"reason":"contiene jerga"}
+{"phrase":"Qué rollo tío","isGood":false,"reason":"contiene jerga"}
+{"phrase":"#vida es dura","isGood":false,"reason":"contiene símbolo especial"}
+{"phrase":"Sígueme en @red","isGood":false,"reason":"contiene símbolo especial"}
+{"phrase":"Visita www.ejemplo","isGood":false,"reason":"contiene símbolo especial"}
+{"phrase":"Nike vende zapatillas","isGood":false,"reason":"contiene marca comercial"}
+{"phrase":"Coca-Cola refresca bien","isGood":false,"reason":"contiene marca comercial"}
+{"phrase":"Barcelona tiene playa","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Madrid ganó partido","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Cristina toca piano","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Pablo escribe cartas","isGood":false,"reason":"contiene nombre propio"}
+{"phrase":"Sofía canta canciones","isGood":false,"reason":"contiene nombre propio"}
 
-Верни только JSON-массив объектов со схемой:
+{"phrase":"El sol brilla","isGood":true,"reason":""}
+{"phrase":"El agua hierve","isGood":true,"reason":""}
+{"phrase":"La sopa enfría","isGood":true,"reason":""}
+{"phrase":"El perro ladra","isGood":true,"reason":""}
+{"phrase":"La casa arde","isGood":true,"reason":""}
+{"phrase":"El viento sopla","isGood":true,"reason":""}
+{"phrase":"La flor crece","isGood":true,"reason":""}
+{"phrase":"El gato duerme","isGood":true,"reason":""}
+{"phrase":"La puerta cierra","isGood":true,"reason":""}
+{"phrase":"El tren avanza","isGood":true,"reason":""}
+{"phrase":"La música suena","isGood":true,"reason":""}
+{"phrase":"El campo verdea","isGood":true,"reason":""}
+{"phrase":"La lluvia cae","isGood":true,"reason":""}
+{"phrase":"El fuego quema","isGood":true,"reason":""}
+{"phrase":"El aire refresca","isGood":true,"reason":""}
+{"phrase":"La arena calienta","isGood":true,"reason":""}
+{"phrase":"El pan cruje","isGood":true,"reason":""}
+{"phrase":"La leche enfría","isGood":true,"reason":""}
+{"phrase":"El día termina","isGood":true,"reason":""}
+{"phrase":"La noche llega","isGood":true,"reason":""}
+{"phrase":"El río fluye","isGood":true,"reason":""}
+{"phrase":"La montaña alta","isGood":true,"reason":""}
+{"phrase":"El cielo claro","isGood":true,"reason":""}
+{"phrase":"La comida huele","isGood":true,"reason":""}
+{"phrase":"El bosque oscuro","isGood":true,"reason":""}
+
+Devuelve el resultado estrictamente en formato JSON, sin explicaciones ni texto fuera de la estructura.
+Esquema JSON:
 {
-  "orig_text": "string",
-  "clean_text": "string",
-  "score": number
+  "phrase": "string",
+  "isGood": "boolean",
+  "reason": "string"
 }
 """.strip()
 
