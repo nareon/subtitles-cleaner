@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Batch creation of cleaned Spanish flashcards with scoring.
+"""Batch creation of labeled Spanish flashcards.
 
-The script reads three-word Spanish phrases, cleans them via the configured
-LLM, and writes each result as a JSON line containing the original text,
-the cleaned version, and a usefulness score in [0, 1].
+The script reads three-word Spanish phrases, classifies them via the configured
+LLM, and writes each result as a JSON line containing the phrase, a boolean
+label, and the optional reason—matching the structure defined in the prompt
+(`phrase`, `isGood`, `reason`).
 """
 from __future__ import annotations
 
 import json
-import math
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -153,20 +153,20 @@ def normalize_items(raw_items, batch: List[str]):
     normalized = []
     for idx, orig in enumerate(batch):
         item = raw_items[idx] if idx < len(raw_items) else {}
-        orig_text = item.get("orig_text") or item.get("orig") or orig
-        clean_text = (item.get("clean_text") or item.get("clean") or "").strip()
-        try:
-            score_val = float(item.get("score", 0))
-        except Exception:
-            score_val = 0.0
-        score_val = max(0.0, min(1.0, score_val))
-        if math.isnan(score_val):
-            score_val = 0.0
+        phrase = item.get("phrase") or item.get("orig_text") or item.get("orig") or orig
+        is_good_raw = item.get("isGood")
+        if isinstance(is_good_raw, bool):
+            is_good = is_good_raw
+        elif isinstance(is_good_raw, str):
+            is_good = is_good_raw.strip().lower() in {"true", "1", "yes"}
+        else:
+            is_good = bool(is_good_raw) if is_good_raw is not None else False
+        reason = str(item.get("reason", "")).strip()
         normalized.append(
             {
-                "orig_text": orig_text,
-                "clean_text": clean_text,
-                "score": score_val,
+                "phrase": phrase,
+                "isGood": is_good,
+                "reason": reason,
             }
         )
     return normalized
@@ -220,7 +220,7 @@ def process_batches(batches: List[List[str]]):
             except Exception as exc:
                 print(f"[error] batch {idx} failed: {exc}")
                 result_items = [
-                    {"orig_text": orig, "clean_text": "", "score": 0.0}
+                    {"phrase": orig, "isGood": False, "reason": ""}
                     for orig in batches[idx]
                 ]
 
